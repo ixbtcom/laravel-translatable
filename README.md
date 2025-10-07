@@ -12,10 +12,12 @@
 [![MIT Licensed](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE.md)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/spatie/laravel-translatable/run-tests.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/spatie/laravel-translatable.svg?style=flat-square)](https://packagist.org/packages/spatie/laravel-translatable)
-    
+
 </div>
 
-This package contains a trait `HasTranslations` to make Eloquent models translatable. Translations are stored as json. There is no extra table needed to hold them.
+> **Note:** This is an extended fork of the original [spatie/laravel-translatable](https://github.com/spatie/laravel-translatable) package with additional storage strategies and driver system support.
+
+This package contains a trait `HasTranslations` to make Eloquent models translatable. Translations can be stored as JSON in a single column, or using hybrid/extra-only drivers for optimized storage strategies. There is no extra table needed to hold them.
 
 ```php
 use Illuminate\Database\Eloquent\Model;
@@ -47,8 +49,42 @@ app()->setLocale('nl');
 $newsItem->name; // Returns 'Naam in het Nederlands'
 
 $newsItem->getTranslations('name'); // returns an array of all name translations
+```
 
-// You can translate nested keys of a JSON column using the -> notation
+### Storage Strategies
+
+This package supports multiple storage strategies through a flexible driver system:
+
+```php
+use Ixbtcom\Common\Casts\HybridTranslatable;
+
+class Article extends Model
+{
+    use HasTranslations;
+
+    // Mix different storage strategies in one model:
+    protected $translatable = [
+        'title',      // JSON driver (default)
+        'seo_title',  // Hybrid driver (base in plain column)
+        'meta',       // ExtraOnly driver
+    ];
+
+    protected $casts = [
+        'seo_title' => HybridTranslatable::class,
+    ];
+}
+```
+
+**Hybrid Driver Benefits:**
+- Base locale stored in a plain column for better performance
+- Other locales in JSON column
+- Perfect for models where you frequently query by the primary language
+
+See the [documentation](docs/advanced-usage/hybrid-and-extra-only-drivers.md) for detailed information about drivers.
+
+### Nested JSON Keys
+
+You can translate nested keys of a JSON column using the -> notation
 // First, add the path to the $translatable array, e.g., 'meta->description'
 $newsItem
    ->setTranslation('meta->description', 'en', 'Description in English')
@@ -94,7 +130,13 @@ We highly appreciate you sending us a postcard from your hometown, mentioning wh
 
 ## Documentation
 
-All documentation is available [on our documentation site](https://spatie.be/docs/laravel-translatable).
+Documentation is available in the [docs](docs/) directory:
+
+- [Installation & Setup](docs/installation-setup.md)
+- [Basic Usage](docs/basic-usage/getting-translations.md)
+- [Advanced Usage: Hybrid and ExtraOnly Drivers](docs/advanced-usage/hybrid-and-extra-only-drivers.md)
+
+Original Spatie documentation: [spatie.be/docs/laravel-translatable](https://spatie.be/docs/laravel-translatable)
 
 ## Testing
 

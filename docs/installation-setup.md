@@ -29,3 +29,14 @@ class NewsItem extends Model
 
     public array $translatable = ['name'];
 }
+```
+
+## Storage Strategies
+
+By default, all translations are stored in a single JSON column. However, this package also supports alternative storage strategies through a driver system:
+
+- **JSON Driver** (default): All translations in one JSON column
+- **Hybrid Driver**: Base locale in a plain column + other locales in JSON
+- **ExtraOnly Driver**: All locales in a JSON column (but with different structure)
+
+See the [Hybrid and ExtraOnly Drivers](/docs/laravel-translatable/v6/advanced-usage/hybrid-and-extra-only-drivers) documentation for detailed information.
