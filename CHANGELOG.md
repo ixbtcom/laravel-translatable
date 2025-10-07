@@ -2,6 +2,55 @@
 
 All notable changes to `laravel-translatable` will be documented in this file
 
+## Fork: Extended Version - 2025-10
+
+This is an extended fork of the original [spatie/laravel-translatable](https://github.com/spatie/laravel-translatable) package.
+
+### Added
+
+- **Driver System Architecture**: Flexible driver-based system for different translation storage strategies
+  - `TranslationDriver` contract defining the interface for all drivers
+  - `AbstractTranslationDriver` base class with common functionality
+  - `TranslationDriverRegistry` for driver resolution and caching
+
+- **Storage Drivers**:
+  - **JsonColumnDriver** (default): Maintains original JSON storage behavior, fully backward compatible
+  - **HybridColumnDriver**: Stores base locale in plain column + other locales in JSON for better query performance
+  - **ExtraOnlyDriver**: All locales stored in JSON column with consistent structure
+
+- **Advanced Configuration**: Support for complex `$translatable` configurations
+  - Simple array: `['title', 'description']` (uses default JSON driver)
+  - Explicit config: `['title' => ['driver' => 'hybrid', 'storageColumn' => 'translations', 'baseLocale' => 'en']]`
+  - Model constants: `EXTRA_JSON_COLUMN`, `BASE_LOCALE` for global model-level configuration
+
+- **Driver Extension Mechanism**: `Translatable::extendDrivers()` for registering custom drivers
+
+- **Comprehensive Documentation**:
+  - Installation and setup guide
+  - Hybrid and ExtraOnly drivers guide with migration examples
+  - Custom driver creation examples
+  - Filament compatibility notes
+
+### Changed
+
+- `HasTranslations` trait refactored to delegation-based architecture
+  - All operations now delegate to appropriate drivers
+  - Maintains full backward compatibility
+  - Driver instances cached per model-attribute combination
+
+### Performance
+
+- Hybrid driver enables better query performance for base locale (plain column indexing)
+- Driver instance caching reduces overhead for frequently accessed attributes
+
+### Migration from Spatie
+
+All existing models continue working without any changes. New features are opt-in through configuration.
+
+---
+
+## Original Spatie Changelog
+
 ## 6.11.4 - 2025-02-20
 
 **Full Changelog**: https://github.com/spatie/laravel-translatable/compare/6.11.3...6.11.4

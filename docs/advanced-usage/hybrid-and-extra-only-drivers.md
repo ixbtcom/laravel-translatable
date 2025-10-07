@@ -37,29 +37,9 @@ Schema::table('articles', function (Blueprint $table) {
 
 ### Model Configuration
 
-There are three ways to configure the Hybrid driver:
+There are two ways to configure the Hybrid driver:
 
-#### 1. Using Casts (Recommended)
-
-```php
-use Illuminate\Database\Eloquent\Model;
-use Spatie\Translatable\HasTranslations;
-use Ixbtcom\Common\Casts\HybridTranslatable;
-
-class Article extends Model
-{
-    use HasTranslations;
-
-    protected $translatable = ['title', 'description'];
-
-    protected $casts = [
-        'title' => HybridTranslatable::class,
-        'description' => HybridTranslatable::class,
-    ];
-}
-```
-
-#### 2. Using Explicit Driver Configuration
+#### 1. Using Explicit Driver Configuration (Recommended)
 
 ```php
 class Article extends Model
@@ -76,7 +56,7 @@ class Article extends Model
 }
 ```
 
-#### 3. Using Model Constants
+#### 2. Using Model Constants
 
 ```php
 class Article extends Model
@@ -86,10 +66,8 @@ class Article extends Model
     const EXTRA_JSON_COLUMN = 'translations';
     const BASE_LOCALE = 'en';
 
-    protected $translatable = ['title'];
-
-    protected $casts = [
-        'title' => HybridTranslatable::class,
+    protected $translatable = [
+        'title' => ['driver' => 'hybrid'],
     ];
 }
 ```
@@ -131,26 +109,6 @@ Schema::table('articles', function (Blueprint $table) {
 ```
 
 ### Model Configuration
-
-#### Using Casts
-
-```php
-use Ixbtcom\Common\Casts\ExtraOnlyTranslatable;
-
-class Article extends Model
-{
-    use HasTranslations;
-
-    protected $translatable = ['subtitle', 'meta_description'];
-
-    protected $casts = [
-        'subtitle' => ExtraOnlyTranslatable::class,
-        'meta_description' => ExtraOnlyTranslatable::class,
-    ];
-}
-```
-
-#### Using Explicit Configuration
 
 ```php
 class Article extends Model
@@ -194,13 +152,15 @@ class Article extends Model
 
     protected $translatable = [
         'title',      // JSON driver (default)
-        'seo_title',  // Hybrid driver
-        'meta',       // ExtraOnly driver
-    ];
-
-    protected $casts = [
-        'seo_title' => HybridTranslatable::class,
-        'meta' => ExtraOnlyTranslatable::class,
+        'seo_title' => [
+            'driver' => 'hybrid',
+            'storageColumn' => 'translations',
+            'baseLocale' => 'en',
+        ],
+        'meta' => [
+            'driver' => 'extra_only',
+            'storageColumn' => 'translations',
+        ],
     ];
 }
 ```
@@ -297,16 +257,21 @@ Schema::table('articles', function (Blueprint $table) {
 Article::chunk(100, function ($articles) {
     foreach ($articles as $article) {
         $translations = $article->getTranslations('title');
-        $baseLocale = config('common.translations.base_locale', 'en');
+        $baseLocale = config('app.locale', 'en');
 
         if (isset($translations[$baseLocale])) {
+            // Move base locale to plain column
             $article->title = $translations[$baseLocale];
+
+            // Remove base locale from translations array
             unset($translations[$baseLocale]);
 
-            $article->translations = array_merge(
-                $article->translations ?? [],
-                [$baseLocale => $translations]
-            );
+            // Store remaining locales in correct structure: {locale: {field: value}}
+            $currentExtra = $article->translations ?? [];
+            foreach ($translations as $locale => $value) {
+                $currentExtra[$locale]['title'] = $value;
+            }
+            $article->translations = $currentExtra;
 
             $article->saveQuietly();
         }
@@ -317,10 +282,12 @@ Article::chunk(100, function ($articles) {
 ### Step 3: Update Model
 
 ```php
-protected $translatable = ['title'];
-
-protected $casts = [
-    'title' => HybridTranslatable::class,
+protected $translatable = [
+    'title' => [
+        'driver' => 'hybrid',
+        'storageColumn' => 'translations',
+        'baseLocale' => 'en',
+    ],
 ];
 ```
 
@@ -343,15 +310,17 @@ protected $translatable = ['meta'];
 $model->setTranslation('meta->title', 'en', 'Value'); // OK
 ```
 
-### Casts
+### JSON Column Casts
 
-The Hybrid and ExtraOnly drivers use custom cast classes. Don't add `'array'` cast for these attributes - the driver handles it automatically.
+When using Hybrid or ExtraOnly drivers, the storage column (e.g., `translations`) should be cast to `array` or `json`:
 
-**Don't do this:**
 ```php
 protected $casts = [
-    'title' => HybridTranslatable::class,
-    'title' => 'array', // ❌ Wrong! Driver handles this
+    'translations' => 'array',  // ✅ Cast the storage column
+];
+
+protected $translatable = [
+    'title' => ['driver' => 'hybrid'],  // Driver handles the attribute
 ];
 ```
 
@@ -361,10 +330,21 @@ You can create your own translation drivers by implementing the `TranslationDriv
 
 ```php
 use Spatie\Translatable\Contracts\TranslationDriver;
+use Spatie\Translatable\Drivers\AbstractTranslationDriver;
 
-class RedisCachedDriver implements TranslationDriver
+class RedisCachedDriver extends AbstractTranslationDriver
 {
-    // Implement required methods
+    public function get(Model $model, string $locale, bool $withFallback = true): mixed
+    {
+        // Your implementation
+    }
+
+    public function set(Model $model, string $locale, mixed $value): void
+    {
+        // Your implementation
+    }
+
+    // ... implement other required methods
 }
 ```
 
@@ -377,7 +357,6 @@ public function boot()
 {
     Translatable::extendDrivers(function ($registry) {
         $registry->register('redis', RedisCachedDriver::class);
-        $registry->registerCast(CustomCast::class, 'redis');
     });
 }
 ```
@@ -386,18 +365,23 @@ Use in your model:
 
 ```php
 protected $translatable = [
-    'frequently_accessed' => ['driver' => 'redis'],
+    'frequently_accessed' => [
+        'driver' => 'redis',
+        'ttl' => 3600,
+    ],
 ];
 ```
 
 ## Compatibility with Filament
 
-Hybrid and ExtraOnly drivers are fully compatible with Filament and other packages that use the standard `HasTranslations` API. No special configuration is needed.
+Hybrid and ExtraOnly drivers are fully compatible with Filament and other packages that use the standard `HasTranslations` API. The drivers are transparent to external packages - they work with the same `getTranslation()` and `setTranslation()` methods.
 
 ```php
 use Filament\Forms\Components\TextInput;
 
+// Works seamlessly with all driver types
 TextInput::make('title')
-    ->required()
-    ->translateLabel(); // Works with all driver types
+    ->required();
 ```
+
+**Note:** Filament's built-in `->translateLabel()` is for form labels, not model translations. For translatable model attributes in Filament, use standard text inputs that work with any driver.

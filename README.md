@@ -56,8 +56,6 @@ $newsItem->getTranslations('name'); // returns an array of all name translations
 This package supports multiple storage strategies through a flexible driver system:
 
 ```php
-use Ixbtcom\Common\Casts\HybridTranslatable;
-
 class Article extends Model
 {
     use HasTranslations;
@@ -65,12 +63,15 @@ class Article extends Model
     // Mix different storage strategies in one model:
     protected $translatable = [
         'title',      // JSON driver (default)
-        'seo_title',  // Hybrid driver (base in plain column)
-        'meta',       // ExtraOnly driver
-    ];
-
-    protected $casts = [
-        'seo_title' => HybridTranslatable::class,
+        'seo_title' => [
+            'driver' => 'hybrid',
+            'storageColumn' => 'translations',
+            'baseLocale' => 'en',
+        ],
+        'meta' => [
+            'driver' => 'extra_only',
+            'storageColumn' => 'translations',
+        ],
     ];
 }
 ```
