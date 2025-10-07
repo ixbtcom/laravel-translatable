@@ -4,6 +4,7 @@ namespace Spatie\Translatable\Drivers;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Spatie\Translatable\Events\TranslationHasBeenSetEvent;
 
 class HybridColumnDriver extends AbstractTranslationDriver
@@ -20,7 +21,7 @@ class HybridColumnDriver extends AbstractTranslationDriver
 
         // If requesting base locale, return plain column value
         if ($locale === $baseLocale) {
-            return $model->getAttributeFromArray($attribute);
+            return Arr::get($model->getAttributes(), $attribute);
         }
 
         // Try to get from storage column
@@ -38,7 +39,7 @@ class HybridColumnDriver extends AbstractTranslationDriver
         }
 
         // Fallback to plain column
-        return $model->getAttributeFromArray($attribute);
+        return Arr::get($model->getAttributes(), $attribute);
     }
 
     public function set(Model $model, string $locale, mixed $value): void
@@ -114,7 +115,7 @@ class HybridColumnDriver extends AbstractTranslationDriver
         $translations = [];
 
         // Get base locale from plain column
-        $baseValue = $model->getAttributeFromArray($attribute);
+        $baseValue = Arr::get($model->getAttributes(), $attribute);
         if ($baseValue !== null) {
             $translations[$baseLocale] = $baseValue;
         }
@@ -199,7 +200,7 @@ class HybridColumnDriver extends AbstractTranslationDriver
      */
     protected function getStorageData(Model $model, string $storageColumn): array
     {
-        $raw = $model->getAttributeFromArray($storageColumn);
+        $raw = Arr::get($model->getAttributes(), $storageColumn);
 
         if ($raw === null) {
             return [];

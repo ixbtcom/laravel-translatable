@@ -4,6 +4,7 @@ namespace Spatie\Translatable\Drivers;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Spatie\Translatable\Events\TranslationHasBeenSetEvent;
 
 class ExtraOnlyDriver extends AbstractTranslationDriver
@@ -149,7 +150,7 @@ class ExtraOnlyDriver extends AbstractTranslationDriver
      */
     protected function getStorageData(Model $model, string $storageColumn): array
     {
-        $raw = $model->getAttributeFromArray($storageColumn);
+        $raw = Arr::get($model->getAttributes(), $storageColumn);
 
         if ($raw === null) {
             return [];

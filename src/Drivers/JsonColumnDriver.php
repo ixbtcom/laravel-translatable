@@ -22,7 +22,7 @@ class JsonColumnDriver extends AbstractTranslationDriver
         $attribute = $this->attribute;
         $baseKey = Str::before($attribute, '->');
 
-        if (is_null($model->getAttributeFromArray($baseKey))) {
+        if (! Arr::has($model->getAttributes(), $baseKey)) {
             $translation = null;
         } else {
             $translation = $translations[$normalizedLocale] ?? null;
@@ -145,7 +145,7 @@ class JsonColumnDriver extends AbstractTranslationDriver
     {
         [$baseKey, $nestedPath] = explode('.', str_replace('->', '.', $key), 2);
 
-        $currentValue = $model->fromJson($model->getAttributeFromArray($baseKey)) ?? [];
+        $currentValue = $model->fromJson(Arr::get($model->getAttributes(), $baseKey)) ?? [];
 
         Arr::set($currentValue, $nestedPath, $translations);
 
