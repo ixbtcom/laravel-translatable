@@ -23,6 +23,13 @@ class Translatable
 
     public bool $allowEmptyStringForTranslation = false;
 
+    protected TranslationDriverRegistry $registry;
+
+    public function __construct()
+    {
+        $this->registry = new TranslationDriverRegistry($this);
+    }
+
     public function fallback(
         ?string $fallbackLocale = null,
         ?bool $fallbackAny = false,
@@ -45,6 +52,24 @@ class Translatable
     public function allowEmptyStringForTranslation(bool $allowEmptyStringForTranslation = true): self
     {
         $this->allowEmptyStringForTranslation = $allowEmptyStringForTranslation;
+
+        return $this;
+    }
+
+    /**
+     * Get the translation driver registry.
+     */
+    public function registry(): TranslationDriverRegistry
+    {
+        return $this->registry;
+    }
+
+    /**
+     * Extend drivers using a callback.
+     */
+    public function extendDrivers(Closure $callback): self
+    {
+        $callback($this->registry);
 
         return $this;
     }
