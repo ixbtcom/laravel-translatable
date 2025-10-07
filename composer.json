@@ -66,6 +66,9 @@
         },
         "aliases": {
             "Translatable": "Spatie\\Translatable\\Facades\\Translatable"
+        },
+        "branch-alias": {
+            "dev-main": "6.11.x-dev"
         }
     },
     "minimum-stability": "dev",
