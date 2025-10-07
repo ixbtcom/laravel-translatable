@@ -14,11 +14,41 @@ trait HasTranslations
 {
     protected ?string $translationLocale = null;
 
+    /**
+     * Translation drivers for each translatable attribute.
+     *
+     * @var array<string, \Spatie\Translatable\Contracts\TranslationDriver>
+     */
+    protected array $translationDrivers = [];
+
     public function initializeHasTranslations(): void
     {
-        $this->mergeCasts(
-            array_fill_keys($this->getTranslatableAttributes(), 'array'),
-        );
+        $translatableConfig = app(Translatable::class);
+        $registry = $translatableConfig->registry();
+
+        // Get raw translatable attributes (may include array configs)
+        $translatablesRaw = $this->getTranslatableAttributesRaw();
+
+        foreach ($translatablesRaw as $key => $config) {
+            // Normalize config
+            if (is_int($key)) {
+                // Simple string attribute
+                $attribute = $config;
+                $config = [];
+            } else {
+                // Array config
+                $attribute = $key;
+            }
+
+            // Resolve driver
+            $driver = $registry->resolve($this, $attribute, $config);
+            $this->translationDrivers[$attribute] = $driver;
+
+            // Only add array cast for JSON driver
+            if ($driver instanceof \Spatie\Translatable\Drivers\JsonColumnDriver) {
+                $this->mergeCasts([$attribute => 'array']);
+            }
+        }
     }
 
     public static function usingLocale(string $locale): self
@@ -41,7 +71,9 @@ trait HasTranslations
             return parent::getAttributeValue($key);
         }
 
-        return $this->getTranslation($key, $this->getLocale(), $this->useFallbackLocale());
+        $driver = $this->driver($key);
+
+        return $driver->get($this, $this->getLocale(), $this->useFallbackLocale());
     }
 
     protected function mutateAttributeForArray($key, $value): mixed
@@ -61,11 +93,17 @@ trait HasTranslations
             return parent::setAttribute($key, $value);
         }
 
+        $driver = $this->driver($key);
+
         if (is_array($value) && (! array_is_list($value) || count($value) === 0)) {
-            return $this->setTranslations($key, $value);
+            $driver->setMany($this, $value);
+
+            return $this;
         }
 
-        return $this->setTranslation($key, $this->getLocale(), $value);
+        $driver->set($this, $this->getLocale(), $value);
+
+        return $this;
     }
 
     public function translate(string $key, string $locale = '', bool $useFallbackLocale = true): mixed
@@ -75,42 +113,18 @@ trait HasTranslations
 
     public function getTranslation(string $key, string $locale, bool $useFallbackLocale = true): mixed
     {
-        $normalizedLocale = $this->normalizeLocale($key, $locale, $useFallbackLocale);
+        $driver = $this->driver($key);
+        $translation = $driver->get($this, $locale, $useFallbackLocale);
 
-        $isKeyMissingFromLocale = ($locale !== $normalizedLocale);
+        // Apply mutators if they exist
+        $mutatorKey = str_replace('->', '-', $key);
 
-        $translations = $this->getTranslations($key);
-
-        $baseKey = Str::before($key, '->'); // get base key in case it is JSON nested key
-
-        $translatableConfig = app(Translatable::class);
-
-        if (is_null(self::getAttributeFromArray($baseKey))) {
-            $translation = null;
-        } else {
-            $translation = isset($translations[$normalizedLocale]) ? $translations[$normalizedLocale] : null;
-            $translation ??= ($translatableConfig->allowNullForTranslation) ? null : '';
+        if ($this->hasGetMutator($mutatorKey)) {
+            return $this->mutateAttribute($mutatorKey, $translation);
         }
 
-        if ($isKeyMissingFromLocale && $translatableConfig->missingKeyCallback) {
-            try {
-                $callbackReturnValue = ($translatableConfig->missingKeyCallback)($this, $key, $locale, $translation, $normalizedLocale);
-                if (is_string($callbackReturnValue)) {
-                    $translation = $callbackReturnValue;
-                }
-            } catch (Exception) {
-                // prevent the fallback to crash
-            }
-        }
-
-        $key = str_replace('->', '-', $key);
-
-        if ($this->hasGetMutator($key)) {
-            return $this->mutateAttribute($key, $translation);
-        }
-
-        if ($this->hasAttributeMutator($key)) {
-            return $this->mutateAttributeMarkedAttribute($key, $translation);
+        if ($this->hasAttributeMutator($mutatorKey)) {
+            return $this->mutateAttributeMarkedAttribute($mutatorKey, $translation);
         }
 
         return $translation;
@@ -130,59 +144,36 @@ trait HasTranslations
     {
         if ($key !== null) {
             $this->guardAgainstNonTranslatableAttribute($key);
-            $translatableConfig = app(Translatable::class);
+            $driver = $this->driver($key);
 
-            if ($this->isNestedKey($key)) {
-                [$key, $nestedKey] = explode('.', str_replace('->', '.', $key), 2);
-            }
-
-            return array_filter(
-                Arr::get($this->fromJson($this->getAttributeFromArray($key)), $nestedKey ?? null, []),
-                fn ($value, $locale) => $this->filterTranslations($value, $locale, $allowedLocales, $translatableConfig->allowNullForTranslation, $translatableConfig->allowEmptyStringForTranslation),
-                ARRAY_FILTER_USE_BOTH,
-            );
+            return $driver->all($this, $allowedLocales);
         }
 
         return array_reduce($this->getTranslatableAttributes(), function ($result, $item) use ($allowedLocales) {
             $result[$item] = $this->getTranslations($item, $allowedLocales);
 
             return $result;
-        });
+        }, []);
     }
 
     public function setTranslation(string $key, string $locale, $value): self
     {
         $this->guardAgainstNonTranslatableAttribute($key);
 
-        $translations = $this->getTranslations($key);
-
-        $oldValue = $translations[$locale] ?? '';
-
         $mutatorKey = str_replace('->', '-', $key);
 
+        // Apply set mutators if they exist
         if ($this->hasSetMutator($mutatorKey)) {
             $method = 'set'.Str::studly($mutatorKey).'Attribute';
-
             $this->{$method}($value, $locale);
-
-            $value = $this->attributes[$key];
-        } elseif ($this->hasAttributeSetMutator($mutatorKey)) { // handle new attribute mutator
+            $value = $this->attributes[$key] ?? $value;
+        } elseif ($this->hasAttributeSetMutator($mutatorKey)) {
             $this->setAttributeMarkedMutatedAttributeValue($mutatorKey, $value);
-
-            $value = $this->attributes[$mutatorKey];
+            $value = $this->attributes[$mutatorKey] ?? $value;
         }
 
-        $translations[$locale] = $value;
-
-        if ($this->isNestedKey($key)) {
-            unset($this->attributes[$key], $this->attributes[$mutatorKey]);
-
-            $this->fillJsonAttribute($key, $translations);
-        } else {
-            $this->attributes[$key] = json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
-
-        event(new TranslationHasBeenSetEvent($this, $key, $locale, $oldValue, $value));
+        $driver = $this->driver($key);
+        $driver->set($this, $locale, $value);
 
         return $this;
     }
@@ -191,27 +182,18 @@ trait HasTranslations
     {
         $this->guardAgainstNonTranslatableAttribute($key);
 
-        if (! empty($translations)) {
-            foreach ($translations as $locale => $translation) {
-                $this->setTranslation($key, $locale, $translation);
-            }
-        } else {
-            $this->attributes[$key] = $this->asJson([]);
-        }
+        $driver = $this->driver($key);
+        $driver->setMany($this, $translations);
 
         return $this;
     }
 
     public function forgetTranslation(string $key, string $locale): self
     {
-        $translations = $this->getTranslations($key);
+        $this->guardAgainstNonTranslatableAttribute($key);
 
-        unset(
-            $translations[$locale],
-            $this->$key
-        );
-
-        $this->setTranslations($key, $translations);
+        $driver = $this->driver($key);
+        $driver->forget($this, $locale, false);
 
         return $this;
     }
@@ -220,13 +202,8 @@ trait HasTranslations
     {
         $this->guardAgainstNonTranslatableAttribute($key);
 
-        collect($this->getTranslatedLocales($key))->each(function (string $locale) use ($key) {
-            $this->forgetTranslation($key, $locale);
-        });
-
-        if ($asNull) {
-            $this->attributes[$key] = null;
-        }
+        $driver = $this->driver($key);
+        $driver->forget($this, null, $asNull);
 
         return $this;
     }
@@ -242,12 +219,9 @@ trait HasTranslations
 
     public function getTranslatedLocales(string $key): array
     {
-        return array_keys($this->getTranslations($key));
-    }
+        $driver = $this->driver($key);
 
-    public function isNestedKey(string $key): bool
-    {
-        return str_contains($key, '->');
+        return $driver->locales($this);
     }
 
     public function isTranslatableAttribute(string $key): bool
@@ -264,11 +238,11 @@ trait HasTranslations
 
     public function replaceTranslations(string $key, array $translations): self
     {
-        foreach ($this->getTranslatedLocales($key) as $locale) {
-            $this->forgetTranslation($key, $locale);
-        }
+        $this->guardAgainstNonTranslatableAttribute($key);
 
-        $this->setTranslations($key, $translations);
+        $driver = $this->driver($key);
+        $driver->forget($this, null, false);
+        $driver->setMany($this, $translations);
 
         return $this;
     }
@@ -278,58 +252,6 @@ trait HasTranslations
         if (! $this->isTranslatableAttribute($key)) {
             throw AttributeIsNotTranslatable::make($key, $this);
         }
-    }
-
-    protected function normalizeLocale(string $key, string $locale, bool $useFallbackLocale): string
-    {
-        $translatedLocales = $this->getTranslatedLocales($key);
-
-        if (in_array($locale, $translatedLocales)) {
-            return $locale;
-        }
-
-        if (! $useFallbackLocale) {
-            return $locale;
-        }
-
-        if (method_exists($this, 'getFallbackLocale')) {
-            $fallbackLocale = $this->getFallbackLocale();
-        }
-
-        $fallbackConfig = app(Translatable::class);
-
-        $fallbackLocale ??= $fallbackConfig->fallbackLocale ?? config('app.fallback_locale');
-
-        if (! is_null($fallbackLocale) && in_array($fallbackLocale, $translatedLocales)) {
-            return $fallbackLocale;
-        }
-
-        if (! empty($translatedLocales) && $fallbackConfig->fallbackAny) {
-            return $translatedLocales[0];
-        }
-
-        return $locale;
-    }
-
-    protected function filterTranslations(mixed $value = null, ?string $locale = null, ?array $allowedLocales = null, bool $allowNull = false, bool $allowEmptyString = false): bool
-    {
-        if ($value === null && ! $allowNull) {
-            return false;
-        }
-
-        if ($value === '' && ! $allowEmptyString) {
-            return false;
-        }
-
-        if ($allowedLocales === null) {
-            return true;
-        }
-
-        if (! in_array($locale, $allowedLocales)) {
-            return false;
-        }
-
-        return true;
     }
 
     public function setLocale(string $locale): self
@@ -345,6 +267,27 @@ trait HasTranslations
     }
 
     public function getTranslatableAttributes(): array
+    {
+        $raw = $this->getTranslatableAttributesRaw();
+        $attributes = [];
+
+        foreach ($raw as $key => $value) {
+            if (is_int($key)) {
+                // Simple string attribute
+                $attributes[] = $value;
+            } else {
+                // Array config - key is the attribute name
+                $attributes[] = $key;
+            }
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Get raw translatable attributes configuration (may include arrays).
+     */
+    protected function getTranslatableAttributesRaw(): array
     {
         return is_array($this->translatable)
             ? $this->translatable
@@ -366,23 +309,59 @@ trait HasTranslations
     {
         return array_unique(
             array_reduce($this->getTranslatableAttributes(), function ($result, $item) {
-                return array_merge($result, $this->getTranslatedLocales($item));
+                $driver = $this->driver($item);
+
+                return array_merge($result, $driver->locales($this));
             }, [])
         );
     }
 
     public function scopeWhereLocale(Builder $query, string $column, string $locale): void
     {
-        $query->whereNotNull("{$column}->{$locale}");
+        if (! method_exists($query->getModel(), 'isTranslatableAttribute')) {
+            // Fallback for models not using HasTranslations
+            $query->whereNotNull("{$column}->{$locale}");
+
+            return;
+        }
+
+        $model = $query->getModel();
+        if (! $model->isTranslatableAttribute($column)) {
+            $query->whereNotNull("{$column}->{$locale}");
+
+            return;
+        }
+
+        $driver = $model->driver($column);
+        $driver->scopeWhereLocale($query, $locale);
     }
 
     public function scopeWhereLocales(Builder $query, string $column, array $locales): void
     {
-        $query->where(function (Builder $query) use ($column, $locales) {
-            foreach ($locales as $locale) {
-                $query->orWhereNotNull("{$column}->{$locale}");
-            }
-        });
+        if (! method_exists($query->getModel(), 'isTranslatableAttribute')) {
+            // Fallback for models not using HasTranslations
+            $query->where(function (Builder $query) use ($column, $locales) {
+                foreach ($locales as $locale) {
+                    $query->orWhereNotNull("{$column}->{$locale}");
+                }
+            });
+
+            return;
+        }
+
+        $model = $query->getModel();
+        if (! $model->isTranslatableAttribute($column)) {
+            $query->where(function (Builder $query) use ($column, $locales) {
+                foreach ($locales as $locale) {
+                    $query->orWhereNotNull("{$column}->{$locale}");
+                }
+            });
+
+            return;
+        }
+
+        $driver = $model->driver($column);
+        $driver->scopeWhereLocales($query, $locales);
     }
 
     public function scopeWhereJsonContainsLocale(Builder $query, string $column, string $locale, mixed $value, string $operand = '='): void
@@ -417,5 +396,20 @@ trait HasTranslations
                 $query->orWhereNotNull("{$column}->{$locale}");
             }
         });
+    }
+
+    /**
+     * Get translation driver for an attribute.
+     *
+     * @param  string  $attribute  Attribute name
+     * @return \Spatie\Translatable\Contracts\TranslationDriver
+     */
+    protected function driver(string $attribute): \Spatie\Translatable\Contracts\TranslationDriver
+    {
+        if (! isset($this->translationDrivers[$attribute])) {
+            throw new \InvalidArgumentException("No translation driver found for attribute [{$attribute}]. Make sure the model is properly initialized.");
+        }
+
+        return $this->translationDrivers[$attribute];
     }
 }
