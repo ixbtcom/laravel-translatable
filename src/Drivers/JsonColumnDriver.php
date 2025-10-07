@@ -104,7 +104,7 @@ class JsonColumnDriver extends AbstractTranslationDriver
             $nestedKey = null;
         }
 
-        $rawValue = $model->getAttributeFromArray($key);
+        $rawValue = $model->getAttributes()[$key] ?? null;
         $decoded = $model->fromJson($rawValue);
 
         $translations = Arr::get($decoded, $nestedKey, []);
