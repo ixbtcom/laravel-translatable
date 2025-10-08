@@ -67,7 +67,7 @@ class HybridColumnDriver extends AbstractTranslationDriver
         if ($locale === null) {
             // Forget all translations
             $baseLocale = $this->resolveBaseLocale($model);
-            $model->attributes[$attribute] = $asNull ? null : '';
+            $model->setAttr($attribute,$asNull ? null : '');
 
             $storageColumn = $this->resolveStorageColumn($model);
             $storageData = $this->getStorageData($model, $storageColumn);
@@ -87,7 +87,7 @@ class HybridColumnDriver extends AbstractTranslationDriver
         $baseLocale = $this->resolveBaseLocale($model);
 
         if ($locale === $baseLocale) {
-            $model->attributes[$attribute] = $asNull ? null : '';
+            $model->setAttr($asNull ? null : '');
         } else {
             $storageColumn = $this->resolveStorageColumn($model);
             $storageData = $this->getStorageData($model, $storageColumn);
@@ -174,6 +174,6 @@ class HybridColumnDriver extends AbstractTranslationDriver
      */
     protected function setStorageData(Model $model, string $storageColumn, array $data): void
     {
-        $model->attributes[$storageColumn] = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $model->setAttr($storageColumn, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 }

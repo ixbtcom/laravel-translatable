@@ -131,6 +131,6 @@ class ExtraOnlyDriver extends AbstractTranslationDriver
      */
     protected function setStorageData(Model $model, string $storageColumn, array $data): void
     {
-        $model->attributes[$storageColumn] = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $model->setAttr($storageColumn,json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 }

@@ -62,7 +62,7 @@ class JsonColumnDriver extends AbstractTranslationDriver
             unset($model->attributes[$attribute]);
             $this->fillJsonAttribute($model, $attribute, $translations);
         } else {
-            $model->attributes[$attribute] = json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $model->setAttr($attribute,json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         event(new TranslationHasBeenSetEvent($model, $attribute, $locale, $oldValue, $value));
@@ -80,7 +80,7 @@ class JsonColumnDriver extends AbstractTranslationDriver
             }
 
             if ($asNull) {
-                $model->attributes[$attribute] = null;
+                $model->setAttr($attribute,null);
             }
 
             return;
@@ -149,6 +149,6 @@ class JsonColumnDriver extends AbstractTranslationDriver
 
         Arr::set($currentValue, $nestedPath, $translations);
 
-        $model->attributes[$baseKey] = $model->asJson($currentValue);
+        $model->setAttr($baseKey,$model->asJson($currentValue));
     }
 }

@@ -51,6 +51,10 @@ trait HasTranslations
         }
     }
 
+    public function setAttr($attribute,$value){
+        $this->attributes[$attribute] = $value;
+    }
+
     public static function usingLocale(string $locale): self
     {
         return (new self)->setLocale($locale);
