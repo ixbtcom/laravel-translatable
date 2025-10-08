@@ -9,9 +9,7 @@ use Spatie\Translatable\Events\TranslationHasBeenSetEvent;
 
 class ExtraOnlyDriver extends AbstractTranslationDriver
 {
-    protected ?string $cachedStorageColumn = null;
 
-    protected ?string $cachedBaseLocale = null;
 
     public function get(Model $model, string $locale, bool $withFallback = true): mixed
     {
@@ -21,7 +19,7 @@ class ExtraOnlyDriver extends AbstractTranslationDriver
         $storageData = $this->getStorageData($model, $storageColumn);
         $value = data_get($storageData, "{$locale}.{$attribute}");
 
-        if ($value !== null || ! $withFallback) {
+        if ($value !== null || !$withFallback) {
             return $value;
         }
 
@@ -111,39 +109,6 @@ class ExtraOnlyDriver extends AbstractTranslationDriver
         });
     }
 
-    /**
-     * Resolve storage column name from model configuration.
-     */
-    protected function resolveStorageColumn(Model $model): string
-    {
-        if ($this->cachedStorageColumn !== null) {
-            return $this->cachedStorageColumn;
-        }
-
-        $this->cachedStorageColumn = $this->getOption('storageColumn')
-            ?? (defined(get_class($model).'::EXTRA_JSON_COLUMN') ? $model::EXTRA_JSON_COLUMN : null)
-            ?? config('common.translations.storage_column')
-            ?? 'translations';
-
-        return $this->cachedStorageColumn;
-    }
-
-    /**
-     * Resolve base locale from model configuration.
-     */
-    protected function resolveBaseLocale(Model $model): string
-    {
-        if ($this->cachedBaseLocale !== null) {
-            return $this->cachedBaseLocale;
-        }
-
-        $this->cachedBaseLocale = $this->getOption('baseLocale')
-            ?? (defined(get_class($model).'::BASE_LOCALE') ? $model::BASE_LOCALE : null)
-            ?? config('common.translations.base_locale')
-            ?? config('app.fallback_locale', 'en');
-
-        return $this->cachedBaseLocale;
-    }
 
     /**
      * Get storage data from model.

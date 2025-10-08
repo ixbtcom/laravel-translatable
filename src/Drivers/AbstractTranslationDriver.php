@@ -43,11 +43,23 @@ abstract class AbstractTranslationDriver implements TranslationDriver
      */
     protected function getFallbackLocale(Model $model): ?string
     {
-        if (method_exists($model, 'getFallbackLocale')) {
-            return $model->getFallbackLocale();
-        }
+       return $model->fallbackLocale();
+    }
 
-        return $this->translatableConfig->fallbackLocale ?? config('app.fallback_locale');
+    /**
+     * Resolve storage column name from model configuration.
+     */
+    protected function resolveStorageColumn(Model $model): string
+    {
+        return $model->translationStorageColumn();
+    }
+
+    /**
+     * Resolve base locale from model configuration.
+     */
+    protected function resolveBaseLocale(Model $model): string
+    {
+        return $model->baseLocale();
     }
 
     /**
