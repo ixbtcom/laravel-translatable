@@ -402,6 +402,17 @@ trait HasTranslations
         });
     }
 
+    public static ?string $baseLocale = null;
+    public static ?string $translationStorageColumn = null;
+
+    public function baseLocale(){
+        return static::$baseLocale ?? config('common.translations.base_locale','ru');
+    }
+
+    public function translationStorageColumn(){
+        return static::$translationStorageColumn ?? config('common.translations.storage_column','extra');
+    }
+
     /**
      * Get translation driver for an attribute.
      *
