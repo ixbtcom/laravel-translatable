@@ -405,8 +405,14 @@ trait HasTranslations
     public static ?string $baseLocale = null;
     public static ?string $translationStorageColumn = null;
 
+    public static ?string $fallbackLocale = null;
+
     public function baseLocale(){
         return static::$baseLocale ?? config('common.translations.base_locale','ru');
+    }
+
+    public function fallbackLocale(){
+        return static::$fallbackLocale ?? config('common.translations.fallback_locale','ru');
     }
 
     public function translationStorageColumn(){
