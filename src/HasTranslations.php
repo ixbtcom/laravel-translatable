@@ -105,17 +105,7 @@ trait HasTranslations
             return $this;
         }
 
-        $activeLocale = $this->translationLocale;
-
-        if (! is_string($activeLocale) || $activeLocale === '') {
-            $activeLocale = method_exists($this, 'baseLocale')
-                ? (string) $this->baseLocale()
-                : (string) (config('common.translations.base_locale')
-                    ?? config('app.locale')
-                    ?? 'ru');
-        }
-
-        $driver->set($this, $activeLocale, $value);
+        $driver->set($this, $this->getLocale(), $value);
 
         return $this;
     }
