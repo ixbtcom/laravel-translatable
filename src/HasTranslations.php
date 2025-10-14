@@ -105,7 +105,17 @@ trait HasTranslations
             return $this;
         }
 
-        $driver->set($this, $this->getLocale(), $value);
+        $activeLocale = $this->translationLocale;
+
+        if (! is_string($activeLocale) || $activeLocale === '') {
+            $activeLocale = method_exists($this, 'baseLocale')
+                ? (string) $this->baseLocale()
+                : (string) (config('common.translations.base_locale')
+                    ?? config('app.locale')
+                    ?? 'ru');
+        }
+
+        $driver->set($this, $activeLocale, $value);
 
         return $this;
     }
@@ -267,7 +277,25 @@ trait HasTranslations
 
     public function getLocale(): string
     {
-        return $this->translationLocale ?: config('app.locale');
+        if ($this->translationLocale) {
+            return $this->translationLocale;
+        }
+
+        $appLocale = app()->getLocale();
+
+        if (is_string($appLocale) && $appLocale !== '') {
+            return $appLocale;
+        }
+
+        $defaultLocale = config('common.translations.base_locale')
+            ?? config('app.locale')
+            ?? config('app.fallback_locale');
+
+        if (is_string($defaultLocale) && $defaultLocale !== '') {
+            return $defaultLocale;
+        }
+
+        return 'ru';
     }
 
     public function getTranslatableAttributes(): array

@@ -48,8 +48,8 @@ class HybridColumnDriver extends AbstractTranslationDriver
         $oldValue = $this->get($model, $locale, false);
 
         if ($locale === $baseLocale) {
-            // Set plain column for base locale
-            $model->$attribute = $value;
+            // Set plain column for base locale without triggering translation recursion
+            $model->setAttr($attribute, $value);
         } else {
             // Set in storage column for non-base locales
             $storageData = $this->getStorageData($model, $storageColumn);
